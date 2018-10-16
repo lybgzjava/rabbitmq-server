@@ -39,6 +39,7 @@
 
 -include_lib("rabbit_common/include/rabbit.hrl").
 -include_lib("stdlib/include/qlc.hrl").
+-include("amqqueue.hrl").
 
 -type ra_server_id() :: {Name :: atom(), Node :: node()}.
 -type msg_id() :: non_neg_integer().
