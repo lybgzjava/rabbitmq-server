@@ -19,7 +19,9 @@
 -export([get/1,
          list/1,
          is_supported/1,
-         is_enabled/1]).
+         is_enabled/1,
+         is_registry_initialized/0,
+         is_registry_written_to_disk/0]).
 
 -spec get(rabbit_feature_flags:feature_name()) ->
     rabbit_feature_flags:feature_props() | undefined.
@@ -45,3 +47,13 @@ is_supported(Arg) ->
 is_enabled(Arg) ->
     rabbit_feature_flags:initialize_registry(),
     ?MODULE:is_enabled(Arg).
+
+-spec is_registry_initialized() -> boolean().
+
+is_registry_initialized() ->
+    false.
+
+-spec is_registry_written_to_disk() -> boolean().
+
+is_registry_written_to_disk() ->
+    true.

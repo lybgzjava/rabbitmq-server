@@ -30,7 +30,11 @@ quorum_queue_migration(FeatureName, _FeatureProps, enable) ->
               rabbit_durable_queue],
     rabbit_table:wait(Tables),
     Fields = amqqueue:fields(amqqueue_v2),
-    migrate_to_amqqueue_with_type(FeatureName, Tables, Fields).
+    migrate_to_amqqueue_with_type(FeatureName, Tables, Fields);
+quorum_queue_migration(_FeatureName, _FeatureProps, is_enabled) ->
+    Fields = amqqueue:fields(amqqueue_v2),
+    mnesia:table_info(rabbit_queue, attributes) =:= Fields andalso
+    mnesia:table_info(rabbit_durable_queue, attributes) =:= Fields.
 
 migrate_to_amqqueue_with_type(FeatureName, [Table | Rest], Fields) ->
     rabbit_log:info("Feature flag `~s`:   migrating Mnesia table ~s...",
