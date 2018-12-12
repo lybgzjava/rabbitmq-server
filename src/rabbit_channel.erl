@@ -651,7 +651,8 @@ handle_cast({confirm, MsgSeqNos, QPid}, State) ->
 handle_info({ra_event, {Name, _} = From, _} = Evt,
             #ch{queue_states = QueueStates,
                 queue_names = QNames,
-                consumer_mapping = ConsumerMapping} = State0) ->
+                consumer_mapping = ConsumerMapping,
+                unconfirmed = UC} = State0) ->
     case QueueStates of
         #{Name := QState0} ->
             case rabbit_quorum_queue:handle_event(Evt, QState0) of
@@ -708,7 +709,11 @@ handle_info({ra_event, {Name, _} = From, _} = Evt,
                     end,
                     noreply_coalesce(
                       State3#ch{queue_states = maps:remove(Name, QueueStates),
-                                queue_names = maps:remove(Name, QNames)})
+                                queue_names = maps:remove(Name, QNames)});
+                {reject_publish, MsgSeqNo, QState1} ->
+                    {MXs, UC1} = dtree:take_one(MsgSeqNo, UC),
+                    State1 = State0#ch{queue_states = maps:put(Name, QState1, QueueStates)},
+                    noreply_coalesce(record_rejects(MXs, State1#ch{unconfirmed = UC1}))
             end;
         _ ->
             %% the assumption here is that the queue state has been cleaned up and

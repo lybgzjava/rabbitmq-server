@@ -30,6 +30,7 @@
          tick/2,
          overview/1,
          get_checked_out/4,
+         reject/4,
          %% aux
          init_aux/1,
          handle_aux/6,
@@ -197,7 +198,8 @@
          %% This is done so that consumers are still served in a deterministic
          %% order on recovery.
          prefix_msg_counts = {0, 0} :: {Return :: non_neg_integer(),
-                                        PrefixMsgs :: non_neg_integer()}
+                                        PrefixMsgs :: non_neg_integer()},
+         max_length :: maybe(non_neg_integer())
         }).
 
 -opaque state() :: #state{}.
@@ -207,7 +209,8 @@
                     become_leader_handler => applied_mfa(),
                     cancel_consumer_handler => applied_mfa(),
                     metrics_handler => applied_mfa(),
-                    shadow_copy_interval => non_neg_integer()}.
+                    shadow_copy_interval => non_neg_integer(),
+                    max_length => non_neg_integer}.
 
 -export_type([protocol/0,
               delivery/0,
@@ -232,11 +235,13 @@ update_state(Conf, State) ->
     BLH = maps:get(become_leader_handler, Conf, undefined),
     MH = maps:get(metrics_handler, Conf, undefined),
     SHI = maps:get(shadow_copy_interval, Conf, ?SHADOW_COPY_INTERVAL),
+    MaxLength = maps:get(max_length, Conf, undefined),
     State#state{dead_letter_handler = DLH,
                 cancel_consumer_handler = CCH,
                 become_leader_handler = BLH,
                 metrics_handler = MH,
-                shadow_copy_interval = SHI}.
+                shadow_copy_interval = SHI,
+                max_length = MaxLength}.
 
 % msg_ids are scoped per consumer
 % ra_indexes holds all raft indexes for enqueues currently on queue
@@ -531,6 +536,16 @@ overview(#state{consumers = Cons,
       num_enqueuers => maps:size(Enqs),
       num_ready_messages => maps:size(Messages),
       num_messages => rabbit_fifo_index:size(Indexes)}.
+
+reject(_Meta, {enqueue, _, _, _}, CmdReply, State) ->
+    case {will_overflow(State), CmdReply} of
+        {true, {notify_on_consensus, Corr, Pid}} ->
+            {[{send_msg, Pid, {reject_publish, Corr, self()}, ra_event}], true};
+        {WillOverflow, _} ->
+            {[], WillOverflow}
+    end;
+reject(_Meta, _Cmd, _ReplyType, _State) ->
+    {[], false}.
 
 -spec get_checked_out(consumer_id(), msg_id(), msg_id(), state()) ->
     [delivery_msg()].
@@ -1074,6 +1089,11 @@ dehydrate_consumer(#consumer{checked_out = Checked0} = Con) ->
     Checked = maps:map(fun (_, _) -> '$prefix_msg' end, Checked0),
     Con#consumer{checked_out = Checked}.
 
+will_overflow(#state{max_length = undefined}) ->
+    false;
+will_overflow(#state{max_length = MaxLength,
+                     ra_indexes = Indexes}) ->
+    rabbit_fifo_index:size(Indexes) >= MaxLength.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

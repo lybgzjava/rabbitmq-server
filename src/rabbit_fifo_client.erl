@@ -491,6 +491,14 @@ handle_ra_event(Leader, {machine, leader_change}, State0) ->
     %% and resend any pending commands
     State = resend_all_pending(State0#state{leader = Leader}),
     {internal, [], [], State};
+handle_ra_event(Leader, {machine, {reject_publish, SeqId, _Pid}}, State0) ->
+    case maps:take(SeqId, State0#state.pending) of
+        {{Correlation, _}, Pending} ->
+            {reject_publish, Correlation, State0#state{pending = Pending,
+                                                       leader = Leader}};
+        error ->
+            {internal, [], [], State0}
+    end;
 handle_ra_event(_From, {rejected, {not_leader, undefined, _Seq}}, State0) ->
     % TODO: how should these be handled? re-sent on timer or try random
     {internal, [], [], State0};

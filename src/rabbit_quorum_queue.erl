@@ -156,10 +156,12 @@ ra_machine(Q) ->
     {module, rabbit_fifo, ra_machine_config(Q)}.
 
 ra_machine_config(Q = #amqqueue{name = QName}) ->
+    MaxLength = args_policy_lookup(<<"max-length">>, fun res_arg/2, Q),
     #{dead_letter_handler => dlx_mfa(Q),
       cancel_consumer_handler => {?MODULE, cancel_consumer, [QName]},
       become_leader_handler => {?MODULE, become_leader, [QName]},
-      metrics_handler => {?MODULE, update_metrics, [QName]}}.
+      metrics_handler => {?MODULE, update_metrics, [QName]},
+      max_length => MaxLength}.
 
 cancel_consumer_handler(QName, {ConsumerTag, ChPid}, _Name) ->
     Node = node(ChPid),
@@ -711,7 +713,7 @@ qnode({_, Node}) ->
     Node.
 
 check_invalid_arguments(QueueName, Args) ->
-    Keys = [<<"x-expires">>, <<"x-message-ttl">>, <<"x-max-length">>,
+    Keys = [<<"x-expires">>, <<"x-message-ttl">>,
             <<"x-max-length-bytes">>, <<"x-max-priority">>, <<"x-overflow">>,
             <<"x-queue-mode">>],
     [case rabbit_misc:table_lookup(Args, Key) of
